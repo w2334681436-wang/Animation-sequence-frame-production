@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>像素精灵工坊 - Sprite Sheet Animator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        /* 像素艺术渲染设置，防止模糊 */
+        canvas {
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        .checkerboard {
+            background-color: #2d2d2d;
+            background-image: 
+                linear-gradient(45deg, #3a3a3a 25%, transparent 25%), 
+                linear-gradient(-45deg, #3a3a3a 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #3a3a3a 75%), 
+                linear-gradient(-45deg, transparent 75%, #3a3a3a 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        /* 去掉 number input 的默认箭头 */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 h-screen flex flex-col overflow-hidden font-sans">
+
+    <!-- 顶部导航 -->
+    <header class="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center shadow-lg z-10">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-indigo-500 rounded flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <h1 class="text-xl font-bold tracking-wider text-indigo-400">序列帧制作</h1>
+        </div>
+        
+        <div class="flex gap-3">
+            <button onclick="togglePageFullScreen()" class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-2 rounded-md transition flex items-center gap-2" title="网页全屏">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+            </button>
+
+            <button onclick="document.getElementById('fileInput').click()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md transition flex items-center gap-2 shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                上传素材图片
+            </button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" class="hidden">
+    </header>
+
+    <!-- 主体内容 -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- 左侧控制面板 -->
+        <aside class="w-80 bg-gray-800 border-r border-gray-700 flex flex-col overflow-y-auto z-10 shadow-xl select-none">
+            <div class="p-5 space-y-6">
+            
+                
+                <!-- 1. 背景处理 -->
+<section class="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+                    <h2 class="text-sm font-semibold text-gray-300 uppercase mb-3 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                        1. 背景去色
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <div>
+                            <label class="text-xs text-gray-400 block mb-1">去除颜色</label>
+                            <div class="flex gap-2">
+                                <div class="relative group">
+                                    <input type="color" id="bgColorPicker" value="#ffffff" class="h-9 w-12 p-0 border-0 bg-transparent cursor-pointer rounded overflow-hidden">
+                                </div>
+                                <button id="eyedropperBtn" onclick="toggleEyedropper()" class="flex-1 bg-gray-600 hover:bg-gray-500 text-xs rounded text-gray-200 flex items-center justify-center gap-2 transition border border-gray-500">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                    </svg>
+                                    吸取颜色
+                                </button>
+                            </div>
+                            <p class="text-[10px] text-gray-500 mt-1">点击“吸取颜色”后，在右侧画布点击背景。</p>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <label class="text-xs text-gray-400">容差 (Tolerance)</label>
+                                <span id="toleranceValue" class="text-xs text-indigo-300 font-mono">20</span>
+                            </div>
+                            <input type="range" id="toleranceRange" min="0" max="150" value="20" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                        </div>
+                        
+                        <div>
+    <div class="flex justify-between mb-1">
+        <label class="text-xs text-gray-400">边缘柔化 (Feather)</label>
+        <span id="featherValue" class="text-xs text-pink-300 font-mono">0</span>
+    </div>
+    <input type="range" id="featherRange" min="0" max="50" value="0" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-pink-500">
+</div>
+
+                        <div class="bg-gray-800 p-2 rounded border border-gray-600">
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="floodFill" class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-gray-700 border-gray-500">
+                                <label for="floodFill" class="text-xs text-white font-bold select-none cursor-pointer">仅去除外部背景 (保护内部)</label>
+                            </div>
+                            <p class="text-[10px] text-orange-300 mt-1 ml-6 leading-tight">
+                                注意：如果两腿之间有残留，请<b>先吸取背景色</b>，然后<b>取消勾选</b>此项，并调节容差。
+                            </p>
+                        </div>
+                        
+                        <div class="flex items-center gap-2 pt-1">
+                             <input type="checkbox" id="autoProcess" checked class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 bg-gray-700 border-gray-500">
+                             <label for="autoProcess" class="text-xs text-gray-300 select-none">上传时自动处理</label>
+                        </div>
+                        
+                        <button id="reprocessBtn" class="w-full mt-2 bg-indigo-600 hover:bg-indigo-500 text-xs py-2 rounded text-white font-semibold shadow transition">
+                            应用去色设置
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 2. 帧切割设置 (已优化) -->
+                <section class="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+                    <div class="flex justify-between items-center mb-3">
+                        <h2 class="text-sm font-semibold text-gray-300 uppercase flex items-center gap-2">
+                            <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                            2. 帧切割
+                        </h2>
+                        <div class="flex gap-1">
+                            <button onclick="setPreset(32)" class="text-[10px] bg-gray-600 px-2 py-1 rounded hover:bg-gray-500">32x</button>
+                            <button onclick="setPreset(64)" class="text-[10px] bg-gray-600 px-2 py-1 rounded hover:bg-gray-500">64x</button>
+                        </div>
+                    </div>
+
+                    <!-- 宽度与高度 -->
+                  <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-xs text-gray-400 mb-1">
+                                <label>宽度 (Width)</label>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button class="w-8 h-8 shrink-0 bg-gray-600 rounded hover:bg-indigo-600 text-white font-bold transition flex items-center justify-center" onclick="adjustValue('frameWidth', -1)">-</button>
+                                <input type="number" id="frameWidth" value="64" min="1" class="flex-1 min-w-0 h-8 bg-gray-900 border border-gray-600 rounded px-2 text-sm text-center focus:border-indigo-500 outline-none">
+                                <button class="w-8 h-8 shrink-0 bg-gray-600 rounded hover:bg-indigo-600 text-white font-bold transition flex items-center justify-center" onclick="adjustValue('frameWidth', 1)">+</button>
+                            </div>
+                            <input type="range" id="frameWidthSlider" min="1" class="w-full mt-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500 opacity-50 hover:opacity-100 transition">
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs text-gray-400 mb-1">
+                                <label>高度 (Height)</label>
+                            </div>
+                            <div class="flex items-center gap-1">
+                                <button class="w-8 h-8 shrink-0 bg-gray-600 rounded hover:bg-indigo-600 text-white font-bold transition flex items-center justify-center" onclick="adjustValue('frameHeight', -1)">-</button>
+                                <input type="number" id="frameHeight" value="64" min="1" class="flex-1 min-w-0 h-8 bg-gray-900 border border-gray-600 rounded px-2 text-sm text-center focus:border-indigo-500 outline-none">
+                                <button class="w-8 h-8 shrink-0 bg-gray-600 rounded hover:bg-indigo-600 text-white font-bold transition flex items-center justify-center" onclick="adjustValue('frameHeight', 1)">+</button>
+                            </div>
+                            <input type="range" id="frameHeightSlider" min="1" class="w-full mt-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500 opacity-50 hover:opacity-100 transition">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-xs text-gray-400 block mb-1">偏移 X</label>
+                                <div class="flex items-center gap-1">
+                                    <button class="w-6 h-8 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('offsetX', -1)">-</button>
+                                    <input type="number" id="offsetX" value="0" class="flex-1 min-w-0 h-8 bg-gray-900 border border-gray-600 rounded text-sm text-center outline-none">
+                                    <button class="w-6 h-8 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('offsetX', 1)">+</button>
+                                </div>
+                                <input type="range" id="offsetXSlider" min="0" class="w-full mt-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-gray-400 opacity-50 hover:opacity-100">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400 block mb-1">偏移 Y</label>
+                                <div class="flex items-center gap-1">
+                                    <button class="w-6 h-8 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('offsetY', -1)">-</button>
+                                    <input type="number" id="offsetY" value="0" class="flex-1 min-w-0 h-8 bg-gray-900 border border-gray-600 rounded text-sm text-center outline-none">
+                                    <button class="w-6 h-8 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('offsetY', 1)">+</button>
+                                </div>
+                                <input type="range" id="offsetYSlider" min="0" class="w-full mt-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-gray-400 opacity-50 hover:opacity-100">
+                            </div>
+                        </div>
+
+<div class="bg-gray-800 p-2 rounded border border-gray-600 space-y-2">
+                            <label class="text-xs text-indigo-300 font-bold block">序列帧范围选择</label>
+                            
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-[10px] text-gray-400 block mb-1">起始索引 (跳过前N帧)</label>
+                                    <div class="flex items-center gap-1">
+                                        <button class="w-6 h-7 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('startFrameIndex', -1)">-</button>
+                                        <input type="number" id="startFrameIndex" value="0" min="0" class="flex-1 min-w-0 h-7 bg-gray-900 border border-gray-600 rounded text-xs text-center outline-none focus:border-indigo-500">
+                                        <button class="w-6 h-7 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('startFrameIndex', 1)">+</button>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                     <label class="text-[10px] text-gray-400 block mb-1">截取长度 (0=全部)</label>
+                                     <input type="number" id="maxFrames" placeholder="全部" min="0" class="w-full h-7 bg-gray-900 border border-gray-600 rounded px-2 text-xs text-center focus:border-indigo-500 outline-none">
+                                </div>
+                            </div>
+                            <p class="text-[10px] text-gray-500 leading-tight">
+                                提示：调整起始索引可跳过第一行；程序会自动将跨行的动作合并。
+                            </p>
+                            
+                            <div class="pt-1 border-t border-gray-700 mt-1">
+                                <label class="text-[10px] text-gray-400 block mb-1">间距 (Padding)</label>
+                                <div class="flex items-center gap-1">
+                                    <button class="w-6 h-6 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('padding', -1)">-</button>
+                                    <input type="number" id="padding" value="0" min="0" class="flex-1 min-w-0 h-6 bg-gray-900 border border-gray-600 rounded text-xs text-center outline-none">
+                                    <button class="w-6 h-6 shrink-0 bg-gray-600 rounded hover:bg-gray-500 flex items-center justify-center" onclick="adjustValue('padding', 1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                </section>
+
+                <!-- 3. 动画预览 -->
+                <section class="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+                    <h2 class="text-sm font-semibold text-gray-300 uppercase mb-3 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                        3. 动画控制
+                    </h2>
+                    
+                    <div class="mb-2 flex justify-between items-center px-1">
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="showCrosshair" checked class="w-3 h-3 rounded text-indigo-600 bg-gray-700 border-gray-500">
+                            <label for="showCrosshair" class="text-xs text-gray-400 select-none cursor-pointer">显示准星</label>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" id="autoCenter" class="w-3 h-3 rounded text-indigo-600 bg-gray-700 border-gray-500">
+                            <label for="autoCenter" class="text-xs text-green-400 font-bold select-none cursor-pointer">自动居中修复</label>
+                        </div>
+                    </div>
+
+<div id="previewContainer" class="mb-4 text-center bg-gray-800 rounded p-2 border border-gray-700 checkerboard relative h-32 flex items-center justify-center overflow-hidden group">
+                        <canvas id="previewCanvas" class="max-h-full max-w-full"></canvas>
+                        
+                        <button onclick="openImmersivePlayer()" class="absolute bottom-2 right-2 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition flex items-center gap-1 text-xs z-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            大屏播放
+                        </button>
+
+                        <div id="emptyPreview" class="absolute inset-0 flex items-center justify-center text-xs text-gray-500 pointer-events-none">
+                            等待图像...
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                         <div>
+                            <div class="flex justify-between mb-1">
+                                <label class="text-xs text-gray-400">播放速度 (FPS)</label>
+                                <span id="fpsValue" class="text-xs text-indigo-300 font-mono">8</span>
+                            </div>
+                            <input type="range" id="fpsRange" min="1" max="60" value="8" class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-indigo-500">
+                        </div>
+
+                        <div class="flex items-center justify-between">
+                            <button id="playPauseBtn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-xs py-2 rounded mr-2 transition">
+                                暂停
+                            </button>
+                             <div class="text-xs text-gray-400 font-mono">
+                                帧: <span id="currentFrameDisplay" class="text-white">0</span> / <span id="totalFramesDisplay">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                 <!-- 4. 导出 -->
+                 <section class="pt-2 flex flex-col gap-2">
+                    <button onclick="downloadSequenceZip()" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-md font-semibold shadow-lg transition flex justify-center items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                        </svg>
+                        导出序列帧 (ZIP包)
+                    </button>
+                    <p class="text-[10px] text-gray-400 text-center mb-1">推荐：解压后直接拖入游戏引擎，每帧一张图。</p>
+
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="downloadBtn" class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs py-2 rounded border border-gray-600 transition opacity-50 cursor-not-allowed" disabled>
+                            下载完整序列帧
+                        </button>
+                        
+                        <button onclick="downloadCurrentFrame()" class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs py-2 rounded border border-gray-600 transition">
+                            仅下载当前帧
+                        </button>
+                    </div>
+                </section>
+
+                <div class="h-4"></div>
+            </div>
+        </aside>
+
+        <!-- 右侧画布视图 -->
+        <section class="flex-1 flex flex-col bg-gray-900 relative">
+            <div class="absolute top-4 right-4 z-10 bg-gray-800/80 backdrop-blur text-xs px-3 py-1 rounded-full text-gray-300 border border-gray-600 pointer-events-none">
+                缩放: 滚轮 | 移动: 拖拽
+            </div>
+            
+            <div id="canvasContainer" class="flex-1 overflow-hidden relative cursor-grab checkerboard flex items-center justify-center">
+                <!-- 提示文字 -->
+                <div id="welcomeMessage" class="text-center pointer-events-none p-10">
+                    <div class="w-20 h-20 bg-gray-800 rounded-full mx-auto flex items-center justify-center mb-4 border-2 border-dashed border-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-300 mb-2">拖拽图片到这里</h2>
+                    <p class="text-gray-500">或者点击左上角的“上传素材图片”</p>
+                    <p class="text-gray-600 text-sm mt-4">支持 .png, .jpg, .jpeg (白色背景自动变透明)</p>
+                </div>
+
+                <canvas id="mainCanvas" class="shadow-2xl hidden"></canvas>
+            </div>
+        </section>
+    </main>
+
+<script>
+    // --- 核心状态管理 ---
+    const state = {
+        originalImage: null,  
+        processedCanvas: null, 
+        isDragging: false,
+        startX: 0, startY: 0, panX: 0, panY: 0, scale: 1,
+        frames: [], 
+        currentFrameIndex: 0,
+        isPlaying: true,
+        lastFrameTime: 0,
+        isPickingColor: false,
+        animationId: null
+    };
+
+    // --- DOM 元素引用 (使用安全获取方式) ---
+    const getEl = (id) => document.getElementById(id);
+    const elements = {
+        fileInput: getEl('fileInput'),
+        mainCanvas: getEl('mainCanvas'),
+        canvasContainer: getEl('canvasContainer'),
+        previewCanvas: getEl('previewCanvas'),
+        welcomeMessage: getEl('welcomeMessage'),
+        emptyPreview: getEl('emptyPreview'),
+        
+        // Settings
+        bgColorPicker: getEl('bgColorPicker'),
+        toleranceRange: getEl('toleranceRange'),
+        toleranceValue: getEl('toleranceValue'),
+        // === 新增柔化滑块 ===
+        featherRange: getEl('featherRange'),
+        featherValue: getEl('featherValue'),
+        // ===================
+        floodFill: getEl('floodFill'), 
+        reprocessBtn: getEl('reprocessBtn'),
+        
+        frameWidth: getEl('frameWidth'),
+        frameHeight: getEl('frameHeight'),
+        offsetX: getEl('offsetX'),
+        offsetY: getEl('offsetY'),
+        padding: getEl('padding'),
+        maxFrames: getEl('maxFrames'),
+        startFrameIndex: getEl('startFrameIndex'),
+        
+        // Sliders
+        frameWidthSlider: getEl('frameWidthSlider'),
+        frameHeightSlider: getEl('frameHeightSlider'),
+        offsetXSlider: getEl('offsetXSlider'),
+        offsetYSlider: getEl('offsetYSlider'),
+
+        fpsRange: getEl('fpsRange'),
+        fpsValue: getEl('fpsValue'),
+        playPauseBtn: getEl('playPauseBtn'),
+        currentFrameDisplay: getEl('currentFrameDisplay'),
+        totalFramesDisplay: getEl('totalFramesDisplay'),
+        
+        showCrosshair: getEl('showCrosshair'),
+        autoCenter: getEl('autoCenter'),
+        downloadBtn: getEl('downloadBtn'),
+        
+        libraryList: getEl('libraryList'),
+
+        // 全屏相关元素
+        immersiveModal: getEl('immersiveModal'),
+        immersiveCanvas: getEl('immersiveCanvas'),
+        immersiveTitle: getEl('immersiveTitle'),
+        immersiveFps: getEl('immersiveFps'),
+        immersiveFrame: getEl('immersiveFrame'),
+        immersiveScale: getEl('immersiveScale'),
+        immersiveScaleVal: getEl('immersiveScaleVal')
+    };
+
+    const mainCtx = elements.mainCanvas ? elements.mainCanvas.getContext('2d') : null;
+    const previewCtx = elements.previewCanvas ? elements.previewCanvas.getContext('2d') : null;
+
+    // --- 初始化 ---
+    function init() {
+        if (!elements.fileInput) return console.error("找不到 fileInput 元素");
+
+        // 绑定文件上传
+        elements.fileInput.addEventListener('change', handleFileSelect);
+        elements.reprocessBtn.addEventListener('click', processImage);
+        
+        // 拖拽上传
+        document.body.addEventListener('dragover', e => e.preventDefault());
+        document.body.addEventListener('drop', e => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+
+        // 初始化其他监听器
+        setupCanvasInteractions();
+        setupInputListeners();
+        
+        // 渲染库
+        renderLibraryList();
+
+        // 启动动画循环
+        requestAnimationFrame(animationLoop);
+    }
+
+    // --- 输入监听设置 ---
+   // --- 输入监听设置 (已修复：容差调整实时生效) ---
+    function setupInputListeners() {
+        // Input + Slider 同步
+        const syncInputs = [
+            { inp: 'frameWidth', sld: 'frameWidthSlider' },
+            { inp: 'frameHeight', sld: 'frameHeightSlider' },
+            { inp: 'offsetX', sld: 'offsetXSlider' },
+            { inp: 'offsetY', sld: 'offsetYSlider' }
+        ];
+
+        syncInputs.forEach(pair => {
+            const input = getEl(pair.inp);
+            const slider = getEl(pair.sld);
+            if(input && slider) {
+                input.addEventListener('input', () => { slider.value = input.value; updateGridAndAnimation(); });
+                slider.addEventListener('input', () => { input.value = slider.value; updateGridAndAnimation(); });
+            }
+        });
+
+        // 单独处理容差滑块：必须调用 processImage
+        const tolRange = getEl('toleranceRange');
+        if (tolRange) {
+            tolRange.addEventListener('input', (e) => {
+                if(elements.toleranceValue) elements.toleranceValue.textContent = e.target.value;
+                processImage(); // 关键修复：触发图像重处理
+            });
+        }
+
+        // 其他只影响切割网格的参数
+        ['padding', 'maxFrames', 'startFrameIndex'].forEach(id => {
+            const el = getEl(id);
+            if(el) {
+                el.addEventListener('input', (e) => {
+                    updateGridAndAnimation();
+                });
+            }
+        });
+
+        // 柔化滑块监听
+        if(elements.featherRange) {
+            elements.featherRange.addEventListener('input', (e) => {
+                if(elements.featherValue) elements.featherValue.textContent = e.target.value;
+                processImage(); 
+            });
+        }
+
+        if(elements.bgColorPicker) elements.bgColorPicker.addEventListener('input', processImage);
+        if(elements.floodFill) elements.floodFill.addEventListener('change', processImage);
+        
+        if(elements.fpsRange) {
+            elements.fpsRange.addEventListener('input', (e) => {
+                elements.fpsValue.textContent = e.target.value;
+            });
+        }
+        
+        if(elements.playPauseBtn) {
+            elements.playPauseBtn.addEventListener('click', () => {
+                state.isPlaying = !state.isPlaying;
+                elements.playPauseBtn.textContent = state.isPlaying ? '暂停' : '播放';
+            });
+        }
+
+        if(elements.immersiveScale) {
+            elements.immersiveScale.addEventListener('input', (e) => {
+                 if(elements.immersiveScaleVal) elements.immersiveScaleVal.innerText = e.target.value + 'x';
+            });
+        }
+    }
+
+    // --- 通用调整数值 ---
+    window.adjustValue = function(id, delta) {
+        const input = getEl(id);
+        const slider = getEl(id + 'Slider');
+        if(!input) return;
+
+        let currentVal = parseInt(input.value) || 0;
+        const e = window.event;
+        if(e && e.shiftKey) delta *= 10;
+
+        let newVal = currentVal + delta;
+        if (input.min && newVal < parseInt(input.min)) newVal = parseInt(input.min);
+        
+        input.value = newVal;
+        if(slider) slider.value = newVal;
+        updateGridAndAnimation();
+    };
+
+    window.setPreset = function(size) {
+        if(elements.frameWidth) elements.frameWidth.value = size;
+        if(elements.frameHeight) elements.frameHeight.value = size;
+        if(elements.frameWidthSlider) elements.frameWidthSlider.value = size;
+        if(elements.frameHeightSlider) elements.frameHeightSlider.value = size;
+        updateGridAndAnimation();
+    }
+
+    // --- 文件处理 ---
+    function handleFileSelect(e) {
+        if (e.target.files.length) {
+            handleFile(e.target.files[0]);
+            e.target.value = '';
+        }
+    }
+
+    function handleFile(file) {
+        if (!file.type.match('image.*')) {
+            alert("请上传图片文件 (.png, .jpg)");
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            loadImageAndInit(e.target.result);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function loadImageAndInit(src, config = null) {
+        const img = new Image();
+        img.onload = () => {
+            state.originalImage = img;
+            
+            if(elements.frameWidthSlider) {
+                elements.frameWidthSlider.max = img.width;
+                elements.frameHeightSlider.max = img.height;
+                elements.offsetXSlider.max = img.width;
+                elements.offsetYSlider.max = img.height;
+            }
+
+            if (config) {
+                applyConfig(config);
+            } else {
+                if (img.width < 100) {
+                    elements.frameWidth.value = img.width;
+                    elements.frameHeight.value = img.height;
+                } else {
+                    elements.frameHeight.value = img.height;
+                    elements.frameWidth.value = img.height; 
+                }
+                elements.frameWidthSlider.value = elements.frameWidth.value;
+                elements.frameHeightSlider.value = elements.frameHeight.value;
+                state.panX = 0;
+                state.panY = 0;
+                fitImageToScreen();
+            }
+
+            processImage();
+            
+            elements.welcomeMessage.classList.add('hidden');
+            elements.mainCanvas.classList.remove('hidden');
+            elements.downloadBtn.disabled = false;
+            elements.downloadBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            elements.emptyPreview.classList.add('hidden');
+        };
+        img.onerror = () => {
+            alert("图片加载失败，请重试");
+        };
+        img.src = src;
+    }
+
+    function applyConfig(config) {
+        for (let key in config) {
+            const el = getEl(key);
+            if (el) {
+                if (el.type === 'checkbox') el.checked = config[key];
+                else el.value = config[key];
+                
+                const slider = getEl(key + 'Slider');
+                if (slider) slider.value = config[key];
+            }
+        }
+        if(config.bgColorPicker && elements.bgColorPicker) elements.bgColorPicker.value = config.bgColorPicker;
+    }
+
+    function fitImageToScreen() {
+        if(!elements.canvasContainer || !state.originalImage) return;
+        const containerW = elements.canvasContainer.clientWidth;
+        const containerH = elements.canvasContainer.clientHeight;
+        const imgW = state.originalImage.width;
+        const imgH = state.originalImage.height;
+        const scaleW = (containerW - 40) / imgW;
+        const scaleH = (containerH - 40) / imgH;
+        state.scale = Math.min(scaleW, scaleH, 2); 
+        if (state.scale < 0.1) state.scale = 0.1;
+    }
+
+    // --- 图像处理核心 (已修复：保护内部模式支持边缘柔化) ---
+    function processImage() {
+        if (!state.originalImage) return;
+
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = state.originalImage.width;
+        tempCanvas.height = state.originalImage.height;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(state.originalImage, 0, 0);
+
+        const imageData = ctx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const data = imageData.data;
+        
+        const hexColor = elements.bgColorPicker.value;
+        const rTarget = parseInt(hexColor.substr(1, 2), 16);
+        const gTarget = parseInt(hexColor.substr(3, 2), 16);
+        const bTarget = parseInt(hexColor.substr(5, 2), 16);
+        
+        // 获取参数
+        let tolerance = parseInt(elements.toleranceRange.value);
+        let feather = 0;
+        if(elements.featherRange) feather = parseInt(elements.featherRange.value);
+
+        const distTolerance = tolerance * 1.5; 
+        const isFloodFill = elements.floodFill.checked;
+
+        // 距离平方辅助函数
+        const getDistSq = (r, g, b) => (r - rTarget)**2 + (g - gTarget)**2 + (b - bTarget)**2;
+        const thresholdSq = distTolerance * distTolerance;
+        const featherThresholdSq = (distTolerance + feather) * (distTolerance + feather);
+
+        if (isFloodFill) {
+            // --- Flood Fill (魔棒) 模式 + 柔化支持 ---
+            const w = tempCanvas.width;
+            const h = tempCanvas.height;
+            const visited = new Uint8Array(w * h); 
+            const queue = [0]; 
+            
+            // 修复点1：判定连通时，如果开启柔化，范围要放宽到 featherThresholdSq
+            const scanLimitSq = feather > 0 ? featherThresholdSq : thresholdSq;
+
+            const match = (i) => {
+                const a = data[i+3];
+                if (a === 0) return true; // 已经是透明的视为连通
+                return getDistSq(data[i], data[i+1], data[i+2]) <= scanLimitSq;
+            };
+
+            // 只有起点符合条件才开始
+            if (match(0)) {
+                while(queue.length > 0) {
+                    const idx = queue.pop();
+                    const x = idx % w;
+                    const y = Math.floor(idx / w);
+                    const pIdx = (y * w + x) * 4;
+                    
+                    if (visited[idx]) continue;
+                    visited[idx] = 1;
+
+                    // 修复点2：对符合条件的像素应用柔化计算，而不是直接设为0
+                    const r = data[pIdx], g = data[pIdx+1], b = data[pIdx+2];
+                    const distSq = getDistSq(r, g, b);
+
+                    if (distSq <= thresholdSq) {
+                        data[pIdx + 3] = 0; // 核心区域：完全透明
+                    } else if (feather > 0 && distSq <= featherThresholdSq) {
+                        // 边缘区域：半透明柔化
+                        const factor = (Math.sqrt(distSq) - distTolerance) / feather;
+                        data[pIdx + 3] = Math.floor(factor * 255);
+                    }
+
+                    // 搜索邻居
+                    const neighbors = [{nx: x+1, ny: y}, {nx: x-1, ny: y}, {nx: x, ny: y+1}, {nx: x, ny: y-1}];
+                    for (let n of neighbors) {
+                        if (n.nx >= 0 && n.nx < w && n.ny >= 0 && n.ny < h) {
+                            const nIdx = n.ny * w + n.nx;
+                            // 必须没访问过，且符合放宽后的颜色范围
+                            if (!visited[nIdx] && match(nIdx * 4)) {
+                                queue.push(nIdx);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // --- 全局替换模式 ---
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+                if (a === 0) continue;
+
+                const distSq = getDistSq(r, g, b);
+
+                if (distSq <= thresholdSq) {
+                    // 完全在容差内 -> 透明
+                    data[i + 3] = 0;
+                } else if (feather > 0 && distSq <= featherThresholdSq) {
+                    // 在柔化范围内 -> 半透明
+                    const factor = (Math.sqrt(distSq) - distTolerance) / feather;
+                    data[i + 3] = Math.floor(factor * 255);
+                }
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        state.processedCanvas = tempCanvas;
+        updateGridAndAnimation();
+    }
+
+    function updateGridAndAnimation() {
+        if (!state.processedCanvas) return;
+        calculateFrames();
+        drawMainCanvas();
+        if(elements.previewCanvas) {
+            elements.previewCanvas.width = parseInt(elements.frameWidth.value);
+            elements.previewCanvas.height = parseInt(elements.frameHeight.value);
+        }
+    }
+
+    function calculateFrames() {
+        const fw = parseInt(elements.frameWidth.value) || 32;
+        const fh = parseInt(elements.frameHeight.value) || 32;
+        const ox = parseInt(elements.offsetX.value) || 0;
+        const oy = parseInt(elements.offsetY.value) || 0;
+        const pad = parseInt(elements.padding.value) || 0;
+        const startIndex = parseInt(elements.startFrameIndex.value) || 0;
+        let countLimit = elements.maxFrames.value ? parseInt(elements.maxFrames.value) : Infinity;
+        if (countLimit <= 0) countLimit = Infinity;
+
+        const imgW = state.processedCanvas.width;
+        const imgH = state.processedCanvas.height;
+        let allPotentialFrames = [];
+
+        for (let y = oy; y <= imgH - fh; y += (fh + pad)) {
+            for (let x = ox; x <= imgW - fw; x += (fw + pad)) {
+                allPotentialFrames.push({ x, y, w: fw, h: fh });
+            }
+        }
+        state.frames = allPotentialFrames.slice(startIndex, startIndex + countLimit);
+        if(elements.totalFramesDisplay) elements.totalFramesDisplay.textContent = state.frames.length;
+        if (state.currentFrameIndex >= state.frames.length) state.currentFrameIndex = 0;
+    }
+
+    function drawMainCanvas() {
+        if(!mainCtx || !state.processedCanvas) return;
+        const canvas = elements.mainCanvas;
+        const img = state.processedCanvas;
+        canvas.width = elements.canvasContainer.clientWidth;
+        canvas.height = elements.canvasContainer.clientHeight;
+        
+        mainCtx.imageSmoothingEnabled = false;
+        mainCtx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        mainCtx.save();
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        mainCtx.translate(centerX + state.panX, centerY + state.panY);
+        mainCtx.scale(state.scale, state.scale);
+        mainCtx.translate(-img.width / 2, -img.height / 2);
+
+        mainCtx.drawImage(img, 0, 0);
+
+        mainCtx.lineWidth = 1 / state.scale;
+        mainCtx.strokeStyle = 'rgba(255, 0, 50, 0.8)';
+        state.frames.forEach((frame, index) => {
+            mainCtx.strokeRect(frame.x, frame.y, frame.w, frame.h);
+            mainCtx.fillStyle = 'rgba(255, 0, 50, 0.8)';
+            mainCtx.font = `${10 / state.scale}px monospace`;
+            mainCtx.fillText(index + 1, frame.x + 2/state.scale, frame.y + 10/state.scale);
+        });
+        
+        if (state.frames[state.currentFrameIndex]) {
+            const f = state.frames[state.currentFrameIndex];
+            mainCtx.fillStyle = 'rgba(50, 255, 50, 0.3)';
+            mainCtx.fillRect(f.x, f.y, f.w, f.h);
+            mainCtx.strokeStyle = '#00ff00';
+            mainCtx.strokeRect(f.x, f.y, f.w, f.h);
+        }
+        mainCtx.restore();
+    }
+
+    // --- 动画循环 ---
+    function animationLoop(timestamp) {
+        if (state.processedCanvas && state.frames.length > 0) {
+            const fps = parseInt(elements.fpsRange.value);
+            const interval = 1000 / fps;
+            if (state.isPlaying && timestamp - state.lastFrameTime > interval) {
+                state.lastFrameTime = timestamp;
+                state.currentFrameIndex = (state.currentFrameIndex + 1) % state.frames.length;
+                if(elements.currentFrameDisplay) elements.currentFrameDisplay.textContent = state.currentFrameIndex + 1;
+                drawMainCanvas();
+            }
+        }
+
+        if (state.processedCanvas && state.frames.length > 0 && previewCtx) {
+            const frame = state.frames[state.currentFrameIndex];
+            const pw = elements.previewCanvas.width;
+            const ph = elements.previewCanvas.height;
+            previewCtx.clearRect(0, 0, pw, ph);
+
+            if (frame) {
+                if (elements.autoCenter.checked) {
+                    const tmpC = document.createElement('canvas');
+                    tmpC.width = frame.w; tmpC.height = frame.h;
+                    const tmpCtx = tmpC.getContext('2d');
+                    tmpCtx.drawImage(state.processedCanvas, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+                    const d = tmpCtx.getImageData(0,0,frame.w,frame.h).data;
+                    let minX=frame.w, minY=frame.h, maxX=0, maxY=0, found=false;
+                    for(let y=0; y<frame.h; y++) {
+                        for(let x=0; x<frame.w; x++) {
+                            if(d[(y*frame.w+x)*4+3]>0) {
+                                if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
+                                found=true;
+                            }
+                        }
+                    }
+                    if(found) {
+                        const contentW = maxX - minX + 1;
+                        const contentH = maxY - minY + 1;
+                        previewCtx.drawImage(state.processedCanvas, frame.x+minX, frame.y+minY, contentW, contentH, (pw-contentW)/2, (ph-contentH)/2, contentW, contentH);
+                    }
+                } else {
+                    previewCtx.drawImage(state.processedCanvas, frame.x, frame.y, frame.w, frame.h, 0, 0, pw, ph);
+                }
+            }
+            if (elements.showCrosshair.checked) {
+                previewCtx.strokeStyle = '#00ff00'; previewCtx.lineWidth = 1;
+                previewCtx.beginPath(); previewCtx.moveTo(pw/2,0); previewCtx.lineTo(pw/2,ph); previewCtx.moveTo(0,ph/2); previewCtx.lineTo(pw,ph/2); previewCtx.stroke();
+            }
+        }
+
+        // 关键修复：确保全屏逻辑在每一帧都执行
+        loopImmersiveLogic(timestamp);
+        
+        requestAnimationFrame(animationLoop);
+    }
+
+    // --- 库功能 ---
+    const STORAGE_KEY = 'pixel_animator_library';
+
+    window.saveToLibrary = function() {
+        if (!state.originalImage) return alert('请先上传图片并配置！');
+        
+        const name = prompt("给这个动画起个名字：", "New Animation " + new Date().toLocaleTimeString());
+        if (!name) return;
+
+        const config = {};
+        ['frameWidth', 'frameHeight', 'offsetX', 'offsetY', 'padding', 'maxFrames', 'startFrameIndex', 'toleranceRange', 'featherRange', 'fpsRange', 'bgColorPicker'].forEach(id => {
+            const el = getEl(id);
+            if(el) config[id] = el.type === 'checkbox' ? el.checked : el.value;
+        });
+        if(elements.floodFill) config.floodFill = elements.floodFill.checked;
+
+        const imageData = state.originalImage.src;
+
+        const item = {
+            id: Date.now(),
+            name: name,
+            config: config,
+            image: imageData,
+            timestamp: Date.now()
+        };
+
+        try {
+            const library = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+            library.unshift(item); 
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+            renderLibraryList();
+            alert('保存成功！');
+        } catch (e) {
+            alert('保存失败：图片可能太大了，超出了浏览器存储限制。');
+            console.error(e);
+        }
+    }
+
+    function renderLibraryList() {
+        if(!elements.libraryList) return;
+        const list = elements.libraryList;
+        const library = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        
+        list.innerHTML = '';
+        if (library.length === 0) {
+            list.innerHTML = '<div class="text-center text-gray-500 text-xs py-4">暂无保存的动画</div>';
+            return;
+        }
+
+        library.forEach(item => {
+            const div = document.createElement('div');
+            div.className = "bg-gray-800 p-2 rounded border border-gray-600 flex items-center gap-2 group hover:border-indigo-500 transition";
+            div.innerHTML = `
+                <div class="w-10 h-10 bg-gray-900 rounded flex-shrink-0 overflow-hidden relative cursor-pointer" onclick="loadFromLibrary(${item.id})">
+                    <img src="${item.image}" class="w-full h-full object-cover opacity-50 group-hover:opacity-100 transition">
+                    <div class="absolute inset-0 flex items-center justify-center text-[8px] text-white/80 pointer-events-none">LOAD</div>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-xs text-gray-200 font-bold truncate cursor-pointer hover:text-indigo-400" onclick="loadFromLibrary(${item.id})">${item.name}</div>
+                    <div class="text-[10px] text-gray-500">${new Date(item.timestamp).toLocaleDateString()}</div>
+                </div>
+                <div class="flex gap-1">
+                     <button onclick="viewImmersiveDirect(${item.id})" class="text-gray-400 hover:text-green-400 p-1" title="直接全屏播放">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </button>
+                    <button onclick="deleteFromLibrary(${item.id})" class="text-gray-400 hover:text-red-400 p-1" title="删除">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-2.135-1.958L4.867 7h14.266zM6 7V4h12v3M10 4V3h4v1" /></svg>
+                    </button>
+                </div>
+            `;
+            list.appendChild(div);
+        });
+    }
+
+    window.loadFromLibrary = function(id) {
+        const library = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const item = library.find(i => i.id === id);
+        if (item) {
+            if(confirm(`确定要加载 "${item.name}" 吗？当前未保存的工作将丢失。`)) {
+                loadImageAndInit(item.image, item.config);
+            }
+        }
+    }
+
+    window.deleteFromLibrary = function(id) {
+        if(!confirm('确定删除吗？')) return;
+        let library = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        library = library.filter(i => i.id !== id);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+        renderLibraryList();
+    }
+    
+    window.viewImmersiveDirect = function(id) {
+        window.loadFromLibrary(id);
+        setTimeout(() => { openImmersivePlayer(); }, 500); 
+    }
+
+    // --- 修复后的全屏播放器逻辑 ---
+    let immersiveActive = false;
+
+    window.openImmersivePlayer = function() {
+        if (!state.processedCanvas || state.frames.length === 0) return alert("没有可播放的帧！");
+        
+        const modal = elements.immersiveModal;
+        if(modal) {
+            // 关键：强制设置 flex，覆盖 display:none
+            modal.style.display = 'flex';
+            immersiveActive = true;
+            if(elements.immersiveTitle) elements.immersiveTitle.innerText = "预览播放中 (ESC退出)";
+            
+            // 重置缩放
+            if(elements.immersiveScale) {
+                elements.immersiveScale.value = 5;
+                if(elements.immersiveScaleVal) elements.immersiveScaleVal.innerText = "5x";
+            }
+        }
+    };
+
+    window.closeImmersivePlayer = function() {
+        const modal = elements.immersiveModal;
+        if(modal) {
+            modal.style.display = 'none';
+            immersiveActive = false;
+        }
+    };
+    
+    function loopImmersiveLogic(timestamp) {
+        const modal = elements.immersiveModal;
+        // 如果没有打开全屏，或者模态框是隐藏的，就不画图
+        if (!immersiveActive || !modal || modal.style.display === 'none') return;
+        
+        const ctx = elements.immersiveCanvas ? elements.immersiveCanvas.getContext('2d') : null;
+        if (!ctx) return;
+
+        const frame = state.frames[state.currentFrameIndex];
+        const scale = elements.immersiveScale ? parseInt(elements.immersiveScale.value) : 3;
+        
+        if (frame) {
+            elements.immersiveCanvas.width = frame.w * scale;
+            elements.immersiveCanvas.height = frame.h * scale;
+            ctx.imageSmoothingEnabled = false;
+            ctx.clearRect(0, 0, elements.immersiveCanvas.width, elements.immersiveCanvas.height);
+            
+            ctx.drawImage(
+                state.processedCanvas,
+                frame.x, frame.y, frame.w, frame.h,
+                0, 0, frame.w * scale, frame.h * scale
+            );
+            
+            if(elements.immersiveFps) elements.immersiveFps.textContent = elements.fpsRange.value;
+            if(elements.immersiveFrame) elements.immersiveFrame.textContent = `${state.currentFrameIndex + 1}/${state.frames.length}`;
+        }
+    }
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeImmersivePlayer();
+    });
+
+    // --- 交互: 拖拽画布与吸管 ---
+    function setupCanvasInteractions() {
+        const container = elements.canvasContainer;
+        if(!container) return;
+        
+        container.addEventListener('mousedown', e => {
+            if (state.isPickingColor && state.originalImage) {
+                // 吸色逻辑
+                const rect = elements.mainCanvas.getBoundingClientRect();
+                const scaleX = elements.mainCanvas.width / rect.width;
+                const scaleY = elements.mainCanvas.height / rect.height;
+                const clickX = (e.clientX - rect.left) * scaleX;
+                const clickY = (e.clientY - rect.top) * scaleY;
+                const centerX = elements.mainCanvas.width / 2;
+                const centerY = elements.mainCanvas.height / 2;
+                const imgX = Math.floor((clickX - centerX - state.panX) / state.scale + state.originalImage.width / 2);
+                const imgY = Math.floor((clickY - centerY - state.panY) / state.scale + state.originalImage.height / 2);
+
+                if (imgX >= 0 && imgX < state.originalImage.width && imgY >= 0 && imgY < state.originalImage.height) {
+                    const tempCtx = document.createElement('canvas').getContext('2d');
+                    tempCtx.drawImage(state.originalImage, 0, 0);
+                    const p = tempCtx.getImageData(imgX, imgY, 1, 1).data;
+                    const hex = "#" + ((1 << 24) + (p[0] << 16) + (p[1] << 8) + p[2]).toString(16).slice(1);
+                    if(elements.bgColorPicker) elements.bgColorPicker.value = hex;
+                    toggleEyedropper();
+                    processImage();
+                }
+                return;
+            }
+            state.isDragging = true;
+            state.startX = e.clientX - state.panX;
+            state.startY = e.clientY - state.panY;
+            container.style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', e => {
+            if (!state.isDragging) return;
+            state.panX = e.clientX - state.startX;
+            state.panY = e.clientY - state.startY;
+            drawMainCanvas();
+        });
+
+        window.addEventListener('mouseup', () => {
+            if(state.isDragging) {
+                state.isDragging = false;
+                container.style.cursor = state.isPickingColor ? 'crosshair' : 'grab';
+            }
+        });
+
+        container.addEventListener('wheel', e => {
+            e.preventDefault();
+            const delta = -e.deltaY * 0.001;
+            const newScale = state.scale + delta * state.scale * 5; 
+            state.scale = Math.min(Math.max(0.1, newScale), 50);
+            drawMainCanvas();
+        });
+    }
+
+    window.toggleEyedropper = function() {
+        state.isPickingColor = !state.isPickingColor;
+        const btn = getEl('eyedropperBtn');
+        const container = getEl('canvasContainer');
+        if (state.isPickingColor) {
+            btn.classList.add('bg-indigo-500', 'text-white', 'border-indigo-400');
+            btn.classList.remove('bg-gray-600', 'text-gray-200', 'border-gray-500');
+            container.style.cursor = 'crosshair';
+            btn.innerHTML = '正在吸取...';
+        } else {
+            btn.classList.remove('bg-indigo-500', 'text-white', 'border-indigo-400');
+            btn.classList.add('bg-gray-600', 'text-gray-200', 'border-gray-500');
+            container.style.cursor = 'grab';
+            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /> 吸取颜色';
+        }
+    };
+
+    window.togglePageFullScreen = function() {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(e => console.log(e));
+        else document.exitFullscreen();
+    };
+
+    // 导出 (ZIP)
+    window.downloadSequenceZip = function() {
+        if (!state.processedCanvas || state.frames.length === 0) return alert("没有可用的帧图像！");
+        if (typeof JSZip === 'undefined') return alert("JSZip 库加载失败，请检查网络");
+        const zip = new JSZip();
+        const folder = zip.folder("sprites_sequence");
+        const tempCanvas = document.createElement('canvas');
+        const ctx = tempCanvas.getContext('2d');
+        state.frames.forEach((frame, index) => {
+            tempCanvas.width = frame.w; tempCanvas.height = frame.h;
+            ctx.clearRect(0, 0, frame.w, frame.h);
+            ctx.drawImage(state.processedCanvas, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+            const imgData = tempCanvas.toDataURL("image/png").split(',')[1];
+            folder.file(`frame_${index.toString().padStart(2, '0')}.png`, imgData, {base64: true});
+        });
+        zip.generateAsync({type:"blob"}).then(function(content) {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = "sprite_sequence.zip";
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        });
+    };
+    
+    window.downloadCurrentFrame = function() {
+        if (!state.processedCanvas || state.frames.length === 0) return;
+        const frame = state.frames[state.currentFrameIndex];
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = frame.w; tempCanvas.height = frame.h;
+        const ctx = tempCanvas.getContext('2d');
+        ctx.drawImage(state.processedCanvas, frame.x, frame.y, frame.w, frame.h, 0, 0, frame.w, frame.h);
+        const link = document.createElement('a');
+        link.download = `frame_${state.currentFrameIndex}.png`;
+        link.href = tempCanvas.toDataURL('image/png');
+        link.click();
+    };
+
+    window.addEventListener('resize', () => { if(state.processedCanvas) drawMainCanvas(); });
+    
+    // 启动
+    init();
+</script>
+<div id="immersiveModal" style="display: none;" class="fixed inset-0 z-[10000] bg-black/95 flex-col items-center justify-center backdrop-blur-sm">
+    <div class="absolute top-0 left-0 right-0 p-4 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent z-10">
+        <div class="text-white font-bold text-lg tracking-wider pl-4">
+            <span id="immersiveTitle">全屏预览</span>
+        </div>
+        <div class="flex gap-4 items-center">
+             <div class="text-gray-300 text-sm font-mono bg-gray-800/80 px-3 py-1 rounded border border-gray-600">
+                FPS: <span id="immersiveFps">--</span> | 帧: <span id="immersiveFrame">--</span>
+            </div>
+            <button onclick="closeImmersivePlayer()" class="text-gray-400 hover:text-white hover:bg-red-600/80 rounded-full p-2 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="relative w-full h-full flex items-center justify-center overflow-hidden" onclick="if(event.target === this) closeImmersivePlayer()">
+        <canvas id="immersiveCanvas" class="shadow-2xl ring-1 ring-white/10 cursor-zoom-in" style="image-rendering: pixelated;"></canvas>
+    </div>
+
+    <div class="absolute bottom-10 z-10 flex gap-4 items-center bg-gray-800/90 px-6 py-3 rounded-full border border-gray-600 backdrop-blur shadow-xl">
+        <span class="text-gray-300 text-xs font-bold whitespace-nowrap">缩放倍率</span>
+        <input type="range" id="immersiveScale" min="1" max="20" value="5" class="w-64 h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-yellow-500">
+        <span id="immersiveScaleVal" class="text-yellow-500 text-xs font-mono w-8 text-right">5x</span>
+    </div>
+</div>
+</body>
+</html>
